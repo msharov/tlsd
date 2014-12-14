@@ -1,0 +1,37 @@
+################ Build options #######################################
+
+NAME		:= @PKG_NAME@
+MAJOR		:= @PKG_MAJOR@
+MINOR		:= @PKG_MINOR@
+
+#DEBUG		:= 1
+
+################ Programs ############################################
+
+CC		:= @CC@
+LD		:= @CC@
+INSTALL		:= @INSTALL@
+
+INSTALLEXE	:= ${INSTALL} -D -p -m 700 -o root -g root -s
+INSTALLDATA	:= ${INSTALL} -D -p -m 644 -o root -g root
+
+################ Destination #########################################
+
+BINDIR		:= @sbindir@
+MANDIR		:= @mandir@
+SYSDDIR		:= @libdir@/systemd/system
+
+################ Compiler options ####################################
+
+WARNOPTS	:= -Wall -Wextra -Wredundant-decls -Wshadow @SYSWARNS@
+CFLAGS		:= ${WARNOPTS} @CUSTOMINCDIR@ -march=native -std=c99 \
+		-ffunction-sections -fdata-sections
+LDFLAGS		:= @CUSTOMLIBDIR@
+LIBS		:=
+ifdef DEBUG
+    CFLAGS	+= -O0 -g
+else
+    CFLAGS	+= -Os -g0 -DNDEBUG=1
+    LDFLAGS	+= -s -Wl,-O1,-gc-sections
+endif
+O		:= .o/
