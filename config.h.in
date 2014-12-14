@@ -17,3 +17,10 @@
 
 // Using GNU-specific glibc features
 #define _GNU_SOURCE
+
+// Define to 1 if you have openssl/bio.h
+#undef HAVE_OPENSSL_BIO_H
+// Define to 1 if you have openssl/ssl.h
+#undef HAVE_OPENSSL_SSL_H
+// Define to 1 if you have openssl/err.h
+#undef HAVE_OPENSSL_ERR_H

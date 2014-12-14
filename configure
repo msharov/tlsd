@@ -21,10 +21,10 @@ seds=[s/^#\(DEBUG\)/\1/]
 }';
 
 # Header files
-HEADERS=""
+HEADERS="openssl/bio.h openssl/ssl.h openssl/err.h"
 
 # Libraries
-LIBS="ssl"
+LIBS="ssl crypto"
 
 # First pair is used if nothing matches
 PROGS="CC=gcc LD=ld INSTALL=install"
@@ -263,7 +263,7 @@ fi
 
 SubHeadLibsProgs() {
 local INCPATH LIBPATH LIBSUFFIX found pname pcall esciv
-INCPATH="$ac_var_includedir $ac_var_gccincludedir $ac_var_customincdir"
+INCPATH="$ac_var_includedir $ac_var_gccincludedir $ac_var_customincdir /usr/include"
 INCPATH=`echo $INCPATH | sed 's/\\\\//g'`
 for i in $HEADERS; do
     for p in $INCPATH; do
