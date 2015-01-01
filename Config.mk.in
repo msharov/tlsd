@@ -24,14 +24,14 @@ SYSDDIR		:= @libdir@/systemd/system
 ################ Compiler options ####################################
 
 WARNOPTS	:= -Wall -Wextra -Wredundant-decls -Wshadow @SYSWARNS@
-CFLAGS		:= ${WARNOPTS} @CUSTOMINCDIR@ -march=native -std=c99 \
+CFLAGS		:= ${WARNOPTS} -march=native -std=c11 \
 		-ffunction-sections -fdata-sections
-LDFLAGS		:= @CUSTOMLIBDIR@
 LIBS		:= @libssl@ @libcrypto@
 ifdef DEBUG
-    CFLAGS	+= -O0 -g
+    CFLAGS	+= -O0 -ggdb3
 else
     CFLAGS	+= -Os -g0 -DNDEBUG=1
     LDFLAGS	+= -s -Wl,-O1,-gc-sections
 endif
+BUILDDIR	:= @builddir@/${NAME}
 O		:= .o/

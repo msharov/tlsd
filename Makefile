@@ -7,7 +7,6 @@ SRCS	:= $(wildcard *.c)
 OBJS	:= $(addprefix $O,$(SRCS:.c=.o))
 DEPS	:= ${OBJS:.o=.d}
 CONFS	:= Config.mk config.h
-TMPO    := /tmp/${USER}/make/${NAME}
 ONAME   := $(notdir $(abspath $O))
 
 ################ Compilation ###########################################
@@ -57,7 +56,7 @@ endif
 clean:
 	@if [ -h ${ONAME} ]; then\
 	    rm -f $O.d ${EXE} ${OBJS} ${DEPS} ${ONAME};\
-	    rmdir ${TMPO};\
+	    rmdir ${BUILDDIR};\
 	fi
 
 distclean:	clean
@@ -65,10 +64,10 @@ distclean:	clean
 
 maintainer-clean: distclean
 
-$O.d:   ${TMPO}/.d
-	@[ -h ${ONAME} ] || ln -sf ${TMPO} ${ONAME}
-${TMPO}/.d:     Makefile
-	@mkdir -p ${TMPO} && touch ${TMPO}/.d
+$O.d:   ${BUILDDIR}/.d
+	@[ -h ${ONAME} ] || ln -sf ${BUILDDIR} ${ONAME}
+${BUILDDIR}/.d:     Makefile
+	@mkdir -p ${BUILDDIR} && touch ${BUILDDIR}/.d
 
 Config.mk:	Config.mk.in
 config.h:	config.h.in
