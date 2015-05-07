@@ -6,6 +6,8 @@ EXE	:= $O${NAME}
 SRCS	:= $(wildcard *.c)
 OBJS	:= $(addprefix $O,$(SRCS:.c=.o))
 DEPS	:= ${OBJS:.o=.d}
+LIB	:= $Olib${NAME}.a
+LIBOBJ	:= $Olib${NAME}.o
 CONFS	:= Config.mk config.h
 ONAME   := $(notdir $(abspath $O))
 
@@ -13,7 +15,7 @@ ONAME   := $(notdir $(abspath $O))
 
 .PHONY: all clean distclean maintainer-clean
 
-all:	${CONFS} ${EXE}
+all:	${CONFS} ${EXE} ${LIB}
 
 run:	${EXE}
 	@${EXE}
@@ -21,6 +23,12 @@ run:	${EXE}
 ${EXE}:	${OBJS}
 	@echo "Linking $@ ..."
 	@${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
+
+${LIB}:	${LIBOBJ}
+	@echo "Linking $@ ..."
+	@rm -f $@
+	@${AR} qc $@ $^
+	@${RANLIB} $@
 
 $O%.o:	%.c
 	@echo "    Compiling $< ..."
@@ -36,27 +44,35 @@ $O%.o:	%.c
 .PHONY:	install uninstall
 
 ifdef BINDIR
-EXEI	:= ${BINDIR}/${NAME}
+EXEI	:= ${BINDIR}/$(notdir ${EXE})
+LIBI	:= ${LIBDIR}/$(notdir ${LIB})
+LIBH	:= ${INCDIR}/lib${NAME}.h
 
-install:	${EXEI} ${PAMCNFI} ${SYSDCFI} ${MANI}
+install:	${EXEI} ${LIBI} ${LIBH}
 
 ${EXEI}:	${EXE}
 	@echo "Installing $< as $@ ..."
 	@${INSTALLEXE} $< $@
 
+${LIBI}:	${LIB}
+	@echo "Installing $< as $@ ..."
+	@${INSTALLDATA} $< $@
+
+${LIBH}:	lib${NAME}.h
+	@echo "Installing $< as $@ ..."
+	@${INSTALLDATA} $< $@
+
 uninstall:
-	@if [ -f ${EXEI} ]; then\
-	    echo "Removing ${EXEI} ...";\
-	    rm -f ${EXEI};\
-	fi
+	@echo "Uninstalling ..."
+	@rm -f ${EXEI} ${LIBI} ${LIBH}
 endif
 
 ################ Maintenance ###########################################
 
 clean:
 	@if [ -h ${ONAME} ]; then\
-	    rm -f $O.d ${EXE} ${OBJS} ${DEPS} ${ONAME};\
-	    rmdir ${BUILDDIR};\
+	    rm -f $O.d ${EXE} ${LIB} ${OBJS} ${DEPS} ${ONAME};\
+	    ${RMPATH} ${BUILDDIR};\
 	fi
 
 distclean:	clean

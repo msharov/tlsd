@@ -10,14 +10,19 @@ MINOR		:= @PKG_MINOR@
 
 CC		:= @CC@
 LD		:= @CC@
+AR		:= @AR@
+RANLIB		:= @RANLIB@
 INSTALL		:= @INSTALL@
 
-INSTALLEXE	:= ${INSTALL} -D -p -m 700 -o root -g root -s
-INSTALLDATA	:= ${INSTALL} -D -p -m 644 -o root -g root
+INSTALLEXE	:= ${INSTALL} -D -p -m 755 -s
+INSTALLDATA	:= ${INSTALL} -D -p -m 644
+RMPATH		:= rmdir -p --ignore-fail-on-non-empty
 
 ################ Destination #########################################
 
-BINDIR		:= @sbindir@
+BINDIR		:= @bindir@
+LIBDIR		:= @libdir@
+INCDIR		:= @includedir@
 MANDIR		:= @mandir@
 SYSDDIR		:= @libdir@/systemd/system
 
@@ -25,13 +30,17 @@ SYSDDIR		:= @libdir@/systemd/system
 
 WARNOPTS	:= -Wall -Wextra -Wredundant-decls -Wshadow @SYSWARNS@
 CFLAGS		:= ${WARNOPTS} -march=native -std=c11 \
-		-ffunction-sections -fdata-sections
+		-ffunction-sections -fdata-sections -I@includedir@
+LDFLAGS		:= -L@libdir@
 LIBS		:= @libssl@ @libcrypto@
 ifdef DEBUG
     CFLAGS	+= -O0 -ggdb3
+    LDFLAGS	+= -g
+    LIBS	+= @libcasycom@_d
 else
     CFLAGS	+= -Os -g0 -DNDEBUG=1
     LDFLAGS	+= -s -Wl,-O1,-gc-sections
+    LIBS	+= @libcasycom@
 endif
 BUILDDIR	:= @builddir@/${NAME}
 O		:= .o/

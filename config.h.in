@@ -24,3 +24,22 @@
 #undef HAVE_OPENSSL_SSL_H
 // Define to 1 if you have openssl/err.h
 #undef HAVE_OPENSSL_ERR_H
+// Define to 1 if you have casycom.h
+#undef HAVE_CASYCOM_H
+
+// Verify required dependencies
+#if !HAVE_CASYCOM_H
+    #error "tlsd requires the casycom library: https://github.com/msharov/casycom/"
+#else
+    #include <casycom.h>
+    #if CASYCOM_VERSION < 0x10
+	#error "casycom version 1.0 or later is required"
+    #endif
+#endif
+#if !HAVE_OPENSSL_BIO_H || !HAVE_OPENSSL_SSL_H || !HAVE_OPENSSL_ERR_H
+    #error "tlsd requires the OpenSSL library"
+#else
+    #include <openssl/bio.h>
+    #include <openssl/ssl.h>
+    #include <openssl/err.h>
+#endif
