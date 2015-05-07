@@ -47,8 +47,9 @@ ifdef BINDIR
 EXEI	:= ${BINDIR}/$(notdir ${EXE})
 LIBI	:= ${LIBDIR}/$(notdir ${LIB})
 LIBH	:= ${INCDIR}/lib${NAME}.h
+SYSDS	:= ${SYSDDIR}/${NAME}.service ${SYSDDIR}/${NAME}.socket
 
-install:	${EXEI} ${LIBI} ${LIBH}
+install:	${EXEI} ${LIBI} ${LIBH} ${SYSDS}
 
 ${EXEI}:	${EXE}
 	@echo "Installing $< as $@ ..."
@@ -62,9 +63,17 @@ ${LIBH}:	lib${NAME}.h
 	@echo "Installing $< as $@ ..."
 	@${INSTALLDATA} $< $@
 
+${SYSDDIR}/${NAME}.service:	doc/${NAME}.service
+	@echo "Installing $< as $@ ..."
+	@${INSTALLDATA} $< $@
+
+${SYSDDIR}/${NAME}.socket:	doc/${NAME}.socket
+	@echo "Installing $< as $@ ..."
+	@${INSTALLDATA} $< $@
+
 uninstall:
 	@echo "Uninstalling ..."
-	@rm -f ${EXEI} ${LIBI} ${LIBH}
+	@rm -f ${EXEI} ${LIBI} ${LIBH} ${SYSDS}
 endif
 
 ################ Maintenance ###########################################

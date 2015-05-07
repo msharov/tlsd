@@ -7,8 +7,6 @@
 #include "libtlsd.h"
 #include <netdb.h>
 
-//{{{ TLSTunnel object
-
 enum EConnState {
     state_Prewrite,
     state_Handshake,
@@ -27,6 +25,7 @@ typedef struct _TLSTunnel {
     SSL*		ssl;
     CharVector		obuf;
     CharVector		ibuf;
+    char*		prewrite;
 } TLSTunnel;
 
 //----------------------------------------------------------------------
@@ -67,6 +66,7 @@ static void TLSTunnel_Destroy (void* vo)
 	    SSL_free (o->ssl);
 	    o->ssl = NULL;
 	}
+	xfree (o->prewrite);
 	if (o->cfd >= 0) {
 	    close (o->cfd);
 	    o->cfd = -1;
@@ -83,8 +83,11 @@ static void TLSTunnel_Destroy (void* vo)
     xfree (o);
 }
 
-static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char* port)
+static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char* port, const char* prewrite)
 {
+    if (prewrite)
+	o->prewrite = strdup (prewrite);
+
     // Lookup the host address
     struct addrinfo* ai = NULL;
     static const struct addrinfo hints = { .ai_family = PF_UNSPEC, .ai_socktype = SOCK_STREAM };
@@ -111,13 +114,36 @@ static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char
     vector_reserve (&o->ibuf, 4096);
     vector_reserve (&o->obuf, 4096);
 
-    o->cstate = state_Handshake;
+    o->cstate = state_Prewrite;
     TLSTunnel_TimerR_Timer (o);
 }
 
 static void TLSTunnel_TimerR_Timer (TLSTunnel* o)
 {
     enum ETimerWatchCmd scmd = 0;
+    if (o->cstate == state_Prewrite) {
+	// Prewrite plaintext commands.
+	// This is used for text protocols with an SSL option, such as STARTTLS command in SMTP
+	size_t pwlen = o->prewrite ? strlen (o->prewrite) : 0;
+	while (pwlen) {
+	    ssize_t bw = write (o->sfd, o->prewrite, pwlen);
+	    if (bw <= 0) {
+		if (!bw || errno == ECONNRESET)
+		    casycom_mark_unused (o);
+		else if (errno == EAGAIN)
+		    scmd |= WATCH_WRITE;
+		else if (errno == EINTR)
+		    continue;
+		else
+		    casycom_error ("write: %s", strerror(errno));
+		break;
+	    }
+	    pwlen -= bw;
+	    memmove (o->prewrite, o->prewrite + bw, pwlen + 1);
+	}
+	if (!pwlen)
+	    o->cstate = state_Handshake;
+    }
     if (o->cstate == state_Handshake) {
 	// Do handshake
 	int r;
@@ -140,7 +166,7 @@ static void TLSTunnel_TimerR_Timer (TLSTunnel* o)
 		X509_free (cert);
 	    // Create client data pipe
 	    int cfdp[2];
-	    if (0 > socketpair (PF_LOCAL, SOCK_STREAM| SOCK_NONBLOCK| SOCK_CLOEXEC, IPPROTO_IP, cfdp))
+	    if (0 > socketpair (PF_LOCAL, SOCK_STREAM| SOCK_NONBLOCK, IPPROTO_IP, cfdp))
 		return casycom_error ("socketpair: %s", strerror(errno));
 	    o->cfd = cfdp[0];
 	    PTLSTunnelR_Connected (&o->reply, cfdp[1]);
@@ -238,5 +264,3 @@ const Factory f_TLSTunnel = {
     .Destroy = TLSTunnel_Destroy,
     .dtable = { &d_TLSTunnel_TLSTunnel, &d_TLSTunnel_TimerR, &d_TLSTunnel_IOR, NULL }
 };
-
-//}}}-------------------------------------------------------------------

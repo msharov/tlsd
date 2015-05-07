@@ -37,8 +37,11 @@ static void App_Destroy (void* o UNUSED) {}
 
 static void App_App_Init (App* app, unsigned argc, char* const* argv)
 {
-    for (int opt; 0 < (opt = getopt (argc, argv, "dD"));) {
-	if (opt == 'd')
+    bool bTestSystemService = false;
+    for (int opt; 0 < (opt = getopt (argc, argv, "sdD"));) {
+	if (opt == 's')
+	    bTestSystemService = true;
+	else if (opt == 'd')
 	    casycom_enable_debug_output();
 	else if (opt == 'D')
 	    app->serverArg = "-pd";
@@ -55,7 +58,10 @@ static void App_App_Init (App* app, unsigned argc, char* const* argv)
     app->externp = casycom_create_proxy (&i_Extern, oid_App);
     static const iid_t iil[] = { &i_TLSTunnel, NULL };
     printf ("Launching %s %s\n", TLSD_NAME, app->serverArg);
-    if (0 > PExtern_LaunchPipe (&app->externp, TLSD_NAME, app->serverArg, iil))
+    if (bTestSystemService) {
+        if (0 > PExtern_ConnectSystemLocal (&app->externp, TLSD_SOCKET, iil))
+	    casycom_error ("Extern_ConnectSystemLocal: %s", strerror(errno));
+    } else if (0 > PExtern_LaunchPipe (&app->externp, TLSD_NAME, app->serverArg, iil))
 	return casycom_error ("PExtern_LaunchPipe: %s", strerror(errno));
 }
 
@@ -72,7 +78,7 @@ static void App_ExternR_Connected (App* app, const ExternInfo* einfo)
     if (!bHaveTunnel)
 	return casycom_error ("connected to server that does not support the TLSTunnel interface");
     app->connp = casycom_create_proxy (&i_TLSTunnel, oid_App);
-    PTLSTunnel_Open (&app->connp, "192.168.1.1", "https");
+    PTLSTunnel_Open (&app->connp, "192.168.1.1", "https", NULL);
 }
 
 static void App_IOR_Read (App* app, CharVector* d)
@@ -82,6 +88,9 @@ static void App_IOR_Read (App* app, CharVector* d)
     fflush (stdout);
     while (d->size) {
 	const char* pdate = strstr (d->d, "Date: "), *pnl;
+	if (pdate && ((pnl = strchr (pdate, '\n'))))
+	    vector_erase_n (d, pdate - d->d, pnl-pdate+1);
+	pdate = strstr (d->d, "WWW-Authenticate: ");
 	if (pdate && ((pnl = strchr (pdate, '\n'))))
 	    vector_erase_n (d, pdate - d->d, pnl-pdate+1);
 	ssize_t bw = write (STDOUT_FILENO, d->d, d->size);

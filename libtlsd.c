@@ -9,12 +9,13 @@
 
 enum { method_TLSTunnel_Open };
 
-void PTLSTunnel_Open (const Proxy* pp, const char* host, const char* port)
+void PTLSTunnel_Open (const Proxy* pp, const char* host, const char* port, const char* prewrite)
 {
-    Msg* msg = casymsg_begin (pp, method_TLSTunnel_Open, casystm_size_string(host)+casystm_size_string(port));
+    Msg* msg = casymsg_begin (pp, method_TLSTunnel_Open, casystm_size_string(host)+casystm_size_string(port)+casystm_size_string(prewrite));
     WStm os = casymsg_write (msg);
     casystm_write_string (&os, host);
     casystm_write_string (&os, port);
+    casystm_write_string (&os, prewrite);
     casymsg_end (msg);
 }
 
@@ -24,7 +25,8 @@ static void TLSTunnel_Dispatch (const DTLSTunnel* dtable, void* o, const Msg* ms
 	RStm is = casymsg_read (msg);
 	const char* host = casystm_read_string (&is);
 	const char* port = casystm_read_string (&is);
-	dtable->TLSTunnel_Open (o, host, port);
+	const char* prewrite = casystm_read_string (&is);
+	dtable->TLSTunnel_Open (o, host, port, prewrite);
     } else
 	casymsg_default_dispatch (dtable, o, msg);
 }
@@ -32,7 +34,7 @@ static void TLSTunnel_Dispatch (const DTLSTunnel* dtable, void* o, const Msg* ms
 const Interface i_TLSTunnel = {
     .name       = "TLSTunnel",
     .dispatch   = TLSTunnel_Dispatch,
-    .method     = { "Open\0ss", NULL }
+    .method     = { "Open\0sss", NULL }
 };
 
 //}}}-------------------------------------------------------------------

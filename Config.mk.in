@@ -24,14 +24,14 @@ BINDIR		:= @bindir@
 LIBDIR		:= @libdir@
 INCDIR		:= @includedir@
 MANDIR		:= @mandir@
-SYSDDIR		:= @libdir@/systemd/system
+SYSDDIR		:= ${LIBDIR}/systemd/system
 
 ################ Compiler options ####################################
 
 WARNOPTS	:= -Wall -Wextra -Wredundant-decls -Wshadow @SYSWARNS@
 CFLAGS		:= ${WARNOPTS} -march=native -std=c11 \
-		-ffunction-sections -fdata-sections -I@includedir@
-LDFLAGS		:= -L@libdir@
+		-ffunction-sections -fdata-sections -I@customincdir@
+LDFLAGS		:= -L@customlibdir@
 LIBS		:= @libssl@ @libcrypto@
 ifdef DEBUG
     CFLAGS	+= -O0 -ggdb3

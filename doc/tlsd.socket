@@ -1,0 +1,9 @@
+[Unit]
+Description=TLSD Server Activation Socket
+
+[Socket]
+ListenStream=/run/tlsd.socket
+RemoveOnStop=true
+
+[Install]
+WantedBy=sockets.target
