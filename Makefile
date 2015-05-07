@@ -69,6 +69,8 @@ endif
 
 ################ Maintenance ###########################################
 
+include test/Module.mk
+
 clean:
 	@if [ -h ${ONAME} ]; then\
 	    rm -f $O.d ${EXE} ${LIB} ${OBJS} ${DEPS} ${ONAME};\

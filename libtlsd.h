@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+#define TLSD_SOCKET	"tlsd.socket"
+
 //----------------------------------------------------------------------
 
 typedef void (*MFN_TLSTunnel_Open)(void* o, const char* host, const char* port);

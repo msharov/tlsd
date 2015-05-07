@@ -1,0 +1,12 @@
+Launching tlsd -p
+Connected to server. Imported 1 interface: TLSTunnel
+HTTP/1.1 401 Unauthorized
+Server: httpd
+WWW-Authenticate: Basic realm="WRT160Nv2"
+Content-Type: text/html
+Connection: close
+
+<HTML><HEAD><TITLE>401 Unauthorized</TITLE></HEAD>
+<BODY BGCOLOR="#cc9999"><H4>401 Unauthorized</H4>
+Authorization required.
+</BODY></HTML>
