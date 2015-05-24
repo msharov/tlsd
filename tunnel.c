@@ -231,9 +231,9 @@ static void TLSTunnel_SSLError (const char* label)
     unsigned long err = ERR_get_error();
     const char* errstr = ERR_reason_error_string(err);
     if (errstr)
-	casycom_error ("%s: %s\n", label, errstr);
+	casycom_error ("%s: %s", label, errstr);
     else
-	casycom_error ("%s failed with code 0x%lx\n", label, err);
+	casycom_error ("%s failed with code 0x%lx", label, err);
 }
 
 static int TLSTunnel_VerifyConnection (int preverify, X509_STORE_CTX* x509_ctx)
