@@ -108,7 +108,7 @@ static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char
 	return casycom_error ("SSL_new failed");
     SSL_set_fd (o->ssl, o->sfd); long r;
     // Disable weak ciphers
-    if (1 != (r = SSL_set_cipher_list (o->ssl, "aNULL:-aNULL:ALL:!EXPORT:!LOW:!MEDIUM:!RC2:!3DES:!MD5:!DSS:!SEED:!RC4:!PSK:@STRENGTH")))
+    if (1 != (r = SSL_set_cipher_list (o->ssl, "DEFAULT:!EXPORT:!LOW:!MEDIUM:!RC2:!3DES:!MD5:!DSS:!SEED:!RC4:!PSK:@STRENGTH")))
 	return TLSTunnel_SSLError ("SSL_set_cipher_list");
 
     vector_reserve (&o->ibuf, 4096);
