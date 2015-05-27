@@ -14,13 +14,13 @@ extern "C" {
 
 //----------------------------------------------------------------------
 
-typedef void (*MFN_TLSTunnel_Open)(void* o, const char* host, const char* port, const char* prewrite);
+typedef void (*MFN_TLSTunnel_Open)(void* o, const char* host, const char* port);
 typedef struct _DTLSTunnel {
     const Interface*	interface;
     MFN_TLSTunnel_Open	TLSTunnel_Open;
 } DTLSTunnel;
 
-void PTLSTunnel_Open (const Proxy* pp, const char* host, const char* port, const char* prewrite) noexcept;
+void PTLSTunnel_Open (const Proxy* pp, const char* host, const char* port) noexcept;
 
 extern const Interface i_TLSTunnel;
 

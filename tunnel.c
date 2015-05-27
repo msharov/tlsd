@@ -8,7 +8,6 @@
 #include <netdb.h>
 
 enum EConnState {
-    state_Prewrite,
     state_Handshake,
     state_Data,
     state_Shutdown
@@ -25,7 +24,6 @@ typedef struct _TLSTunnel {
     SSL*		ssl;
     CharVector		obuf;
     CharVector		ibuf;
-    char*		prewrite;
 } TLSTunnel;
 
 //----------------------------------------------------------------------
@@ -66,7 +64,6 @@ static void TLSTunnel_Destroy (void* vo)
 	    SSL_free (o->ssl);
 	    o->ssl = NULL;
 	}
-	xfree (o->prewrite);
 	if (o->cfd >= 0) {
 	    close (o->cfd);
 	    o->cfd = -1;
@@ -83,11 +80,8 @@ static void TLSTunnel_Destroy (void* vo)
     xfree (o);
 }
 
-static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char* port, const char* prewrite)
+static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char* port)
 {
-    if (prewrite)
-	o->prewrite = strdup (prewrite);
-
     // Lookup the host address
     struct addrinfo* ai = NULL;
     static const struct addrinfo hints = { .ai_family = PF_UNSPEC, .ai_socktype = SOCK_STREAM };
@@ -111,50 +105,29 @@ static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char
     if (1 != (r = SSL_set_cipher_list (o->ssl, "DEFAULT:!EXPORT:!LOW:!MEDIUM:!RC2:!3DES:!MD5:!DSS:!SEED:!RC4:!PSK:@STRENGTH")))
 	return TLSTunnel_SSLError ("SSL_set_cipher_list");
 
-    vector_reserve (&o->ibuf, 4096);
-    vector_reserve (&o->obuf, 4096);
+    vector_reserve (&o->ibuf, INT16_MAX);
+    vector_reserve (&o->obuf, INT16_MAX);
 
-    o->cstate = state_Prewrite;
+    o->cstate = state_Handshake;
     TLSTunnel_TimerR_Timer (o);
 }
 
 static void TLSTunnel_TimerR_Timer (TLSTunnel* o)
 {
     enum ETimerWatchCmd scmd = 0;
-    if (o->cstate == state_Prewrite) {
-	// Prewrite plaintext commands.
-	// This is used for text protocols with an SSL option, such as STARTTLS command in SMTP
-	size_t pwlen = o->prewrite ? strlen (o->prewrite) : 0;
-	while (pwlen) {
-	    ssize_t bw = write (o->sfd, o->prewrite, pwlen);
-	    if (bw <= 0) {
-		if (!bw || errno == ECONNRESET)
-		    casycom_mark_unused (o);
-		else if (errno == EAGAIN)
-		    scmd |= WATCH_WRITE;
-		else if (errno == EINTR)
-		    continue;
-		else
-		    casycom_error ("write: %s", strerror(errno));
-		break;
-	    }
-	    pwlen -= bw;
-	    memmove (o->prewrite, o->prewrite + bw, pwlen + 1);
-	}
-	if (!pwlen)
-	    o->cstate = state_Handshake;
-    }
     if (o->cstate == state_Handshake) {
 	// Do handshake
 	int r;
 	if (1 != (r = SSL_connect (o->ssl))) {
 	    int sslerr = SSL_get_error (o->ssl, r);
-	    if (sslerr == SSL_ERROR_ZERO_RETURN)	// SSL server closed connection
-		casycom_mark_unused (o);
+	    if (!r || sslerr == SSL_ERROR_ZERO_RETURN)	// SSL server closed connection
+		return casycom_error ("SSL_connect: handshake unsuccessful");
 	    else if (sslerr == SSL_ERROR_WANT_READ)
 		scmd |= WATCH_READ;
 	    else if (sslerr == SSL_ERROR_WANT_WRITE)
 		scmd |= WATCH_WRITE;
+	    else if (sslerr == SSL_ERROR_SYSCALL)
+		return casycom_error ("SSL_connect: %s", strerror(errno));
 	    else
 		return TLSTunnel_SSLError ("SSL_connect");
 	} else {	// handshake successful
@@ -179,12 +152,14 @@ static void TLSTunnel_TimerR_Timer (TLSTunnel* o)
 	    ssize_t r;
 	    if (0 >= (r = SSL_write (o->ssl, o->obuf.d, o->obuf.size))) {
 		int sslerr = SSL_get_error (o->ssl, r);
-		if (sslerr == SSL_ERROR_WANT_READ)
+		if (!r || sslerr == SSL_ERROR_ZERO_RETURN)	// SSL server closed connection
+		    casycom_mark_unused (o);
+		else if (sslerr == SSL_ERROR_WANT_READ)
 		    scmd |= WATCH_READ;
 		else if (sslerr == SSL_ERROR_WANT_WRITE)
 		    scmd |= WATCH_WRITE;
-		else if (sslerr == SSL_ERROR_ZERO_RETURN)	// SSL server closed connection
-		    casycom_mark_unused (o);
+		else if (sslerr == SSL_ERROR_SYSCALL)
+		    return casycom_error ("SSL_write: %s", strerror(errno));
 		else
 		    return TLSTunnel_SSLError ("SSL_write");
 		break;
@@ -195,12 +170,14 @@ static void TLSTunnel_TimerR_Timer (TLSTunnel* o)
 	    ssize_t r;
 	    if (0 >= (r = SSL_read (o->ssl, &o->ibuf.d[o->ibuf.size], btr))) {
 		int sslerr = SSL_get_error (o->ssl, r);
-		if (sslerr == SSL_ERROR_WANT_READ)
+		if (!r || sslerr == SSL_ERROR_ZERO_RETURN)	// SSL server closed connection
+		    casycom_mark_unused (o);
+		else if (sslerr == SSL_ERROR_WANT_READ)
 		    scmd |= WATCH_READ;
 		else if (sslerr == SSL_ERROR_WANT_WRITE)
 		    scmd |= WATCH_WRITE;
-		else if (sslerr == SSL_ERROR_ZERO_RETURN)	// SSL server closed connection
-		    casycom_mark_unused (o);
+		else if (sslerr == SSL_ERROR_SYSCALL)
+		    return casycom_error ("SSL_read: %s", strerror(errno));
 		else
 		    return TLSTunnel_SSLError ("SSL_read");
 		break;
