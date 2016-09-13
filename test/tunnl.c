@@ -64,12 +64,15 @@ static void App_App_Init (App* app, unsigned argc, char* const* argv)
     // Setup interface request list, containing the i_TLSTunnel interface
     static const iid_t iil[] = { &i_TLSTunnel, NULL };
 
-    printf ("Launching %s %s\n", TLSD_NAME, app->serverArg);
     if (bTestSystemService) {
+	printf ("Connecting to system tlsd\n");
         if (0 > PExtern_ConnectSystemLocal (&app->externp, TLSD_SOCKET, iil))
 	    casycom_error ("Extern_ConnectSystemLocal: %s", strerror(errno));
-    } else if (0 > PExtern_LaunchPipe (&app->externp, TLSD_NAME, app->serverArg, iil))
-	return casycom_error ("PExtern_LaunchPipe: %s", strerror(errno));
+    } else {
+	printf ("Launching %s %s\n", TLSD_NAME, app->serverArg);
+	if (0 > PExtern_LaunchPipe (&app->externp, ".o/"TLSD_NAME, app->serverArg, iil))
+	    return casycom_error ("PExtern_LaunchPipe: %s", strerror(errno));
+    }
 }
 
 static void App_ExternR_Connected (App* app, const ExternInfo* einfo)

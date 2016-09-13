@@ -10,8 +10,7 @@
 enum EConnState {
     state_StartTLS,
     state_Handshake,
-    state_Data,
-    state_Shutdown
+    state_Data
 };
 
 typedef struct _TLSTunnel {
@@ -65,21 +64,22 @@ static void TLSTunnel_Destroy (void* vo)
     TLSTunnel* o = (TLSTunnel*) vo;
     if (o) {
 	if (o->ssl) {
-	    SSL_shutdown (o->ssl);
+	    if (o->cstate == state_Data)
+		SSL_shutdown (o->ssl);
 	    SSL_free (o->ssl);
 	    o->ssl = NULL;
 	}
-	if (o->cfd >= 0) {
-	    close (o->cfd);
-	    o->cfd = -1;
+	if (o->sslctx) {
+	    SSL_CTX_free (o->sslctx);
+	    o->sslctx = NULL;
 	}
 	if (o->sfd >= 0) {
 	    close (o->sfd);
 	    o->sfd = -1;
 	}
-	if (o->sslctx) {
-	    SSL_CTX_free (o->sslctx);
-	    o->sslctx = NULL;
+	if (o->cfd >= 0) {
+	    close (o->cfd);
+	    o->cfd = -1;
 	}
     }
     xfree (o);
