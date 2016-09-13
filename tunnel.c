@@ -8,6 +8,7 @@
 #include <netdb.h>
 
 enum EConnState {
+    state_StartTLS,
     state_Handshake,
     state_Data,
     state_Shutdown
@@ -24,6 +25,9 @@ typedef struct _TLSTunnel {
     SSL*		ssl;
     CharVector		obuf;
     CharVector		ibuf;
+    Proxy		sio;
+    unsigned short	sport;
+    unsigned short	ststate;
 } TLSTunnel;
 
 //----------------------------------------------------------------------
@@ -43,6 +47,7 @@ static void* TLSTunnel_Create (const Msg* msg)
     po->reply = casycom_create_reply_proxy (&i_TLSTunnelR, msg);
     po->timer = casycom_create_proxy (&i_Timer, msg->h.dest);
     po->cio = casycom_create_proxy (&i_FdIO, msg->h.dest);
+    po->sio = casycom_create_proxy (&i_FdIO, msg->h.dest);
     po->sslctx = SSL_CTX_new (SSLv23_method());
     if (!po->sslctx)
 	TLSTunnel_SSLError ("SSL_CTX_new");
@@ -92,6 +97,8 @@ static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char
     o->sfd = socket (ai->ai_family, SOCK_STREAM| SOCK_NONBLOCK| SOCK_CLOEXEC, ai->ai_protocol);
     if (o->sfd < 0)
 	return casycom_error ("socket: %s", strerror(errno));
+    if (ai->ai_family == PF_INET)
+	o->sport = ntohs (((const struct sockaddr_in*) ai->ai_addr)->sin_port);
     if (0 > connect (o->sfd, ai->ai_addr, ai->ai_addrlen) && errno != EINPROGRESS)
 	return casycom_error ("connect: %s", strerror(errno));
     freeaddrinfo (ai);
@@ -100,16 +107,28 @@ static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char
     o->ssl = SSL_new (o->sslctx);
     if (!o->ssl)
 	return casycom_error ("SSL_new failed");
-    SSL_set_fd (o->ssl, o->sfd); long r;
+    SSL_set_fd (o->ssl, o->sfd);
     // Disable weak ciphers
-    if (1 != (r = SSL_set_cipher_list (o->ssl, "DEFAULT:!EXPORT:!LOW:!MEDIUM:!RC2:!3DES:!MD5:!DSS:!SEED:!RC4:!PSK:@STRENGTH")))
+    long r = SSL_set_cipher_list (o->ssl, "DEFAULT:!EXPORT:!LOW:!MEDIUM:!RC2:!3DES:!MD5:!DSS:!SEED:!RC4:!PSK:@STRENGTH");
+    if (r != 1)
 	return TLSTunnel_SSLError ("SSL_set_cipher_list");
 
     vector_reserve (&o->ibuf, INT16_MAX);
     vector_reserve (&o->obuf, INT16_MAX);
 
-    o->cstate = state_Handshake;
-    TLSTunnel_TimerR_Timer (o);
+    // Check if STARTTLS is needed
+    if (o->sport == 587 || o->sport == 25) {
+	o->cstate = state_StartTLS;
+	PFdIO_Attach (&o->sio, o->sfd);
+	char hostname [HOST_NAME_MAX] = "localhost";
+	gethostname (ArrayBlock (hostname));
+	o->obuf.size = snprintf (o->obuf.d, o->obuf.allocated, "EHLO %s\r\n", hostname);
+	PIO_Write (&o->sio, &o->obuf);
+	PIO_Read (&o->sio, &o->ibuf);
+    } else {
+	o->cstate = state_Handshake;
+	TLSTunnel_TimerR_Timer (o);
+    }
 }
 
 static void TLSTunnel_TimerR_Timer (TLSTunnel* o)
@@ -193,9 +212,63 @@ static void TLSTunnel_TimerR_Timer (TLSTunnel* o)
 	PTimer_Watch (&o->timer, scmd, o->sfd, TIMER_NONE);
 }
 
-static void TLSTunnel_IOR_Read (TLSTunnel* o)
+static bool GetSMTPResponse (const char* response, CharVector* d)
 {
-    TLSTunnel_TimerR_Timer (o);
+    const char* r = strstr (d->d, response);
+    if (!r)
+	return false;
+    // Look for terminating newline
+    const char* rend = strchr (r, '\n');
+    if (!rend)
+	return false;
+    // Erase all data in d before and including the matching response
+    vector_erase_n (d, 0, (rend+1)-d->d);
+    d->d[d->size] = 0;	// restore 0-termination for further searches
+    return true;
+}
+
+static void TLSTunnel_IOR_Read (TLSTunnel* o, CharVector* d)
+{
+    if (o->cstate != state_StartTLS)
+	return TLSTunnel_TimerR_Timer (o);
+
+    // Do SMTP STARTTLS
+    assert (d == &o->ibuf && "Client data received in STARTTLS state");
+    assert ((o->sport == 25 || o->sport == 587) && "Only SMTP STARTTLS is currently implemented");
+    // GetSMTPResponse uses strstr and needs 0-termination
+    d->d[d->size] = 0;
+    // looking for greeting 220
+    if (o->ststate == 0 && GetSMTPResponse ("220 ", d))
+	++o->ststate;
+    // Looking for STARTTLS capability
+    if (o->ststate == 1 && GetSMTPResponse ("STARTTLS", d)) {
+	++o->ststate;
+	assert (!o->obuf.size && "Received a response to an unwritten request");
+	o->obuf.size = snprintf (o->obuf.d, o->obuf.allocated, "STARTTLS\r\n");
+	PIO_Write (&o->sio, &o->obuf);
+	return;
+    }
+    // Looking for the STARTTLS acknowledgement
+    if (o->ststate == 2 && GetSMTPResponse ("220 ", d))
+	++o->ststate;
+    // "502 unimplemented" is the only possible error
+    if (GetSMTPResponse ("502 ", d))
+	return casycom_error ("server does not support STARTTLS");
+
+    // Keep waiting for response until STARTTLS is acknowledged
+    if (o->ststate < 3)
+	return;
+
+    // Done reading
+    // Stop reading directly from the server socket. OpenSSL will do that now.
+    assert (!o->obuf.size && "Received a response to an unwritten request");
+    assert (!o->ibuf.size && "Server wrote non-SSL data after STARTTLS");
+    vector_clear (&o->ibuf);
+    o->obuf.size = snprintf (o->obuf.d, o->obuf.allocated, "NOOP\r\n");
+    PIO_Read (&o->sio, NULL);
+    // Go to SSL negotiation
+    o->cstate = state_Handshake;
+    PTimer_Watch (&o->timer, WATCH_READ| WATCH_WRITE, o->sfd, TIMER_NONE);
 }
 
 static void TLSTunnel_IOR_Written (TLSTunnel* o)

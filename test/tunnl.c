@@ -78,7 +78,7 @@ static void App_ExternR_Connected (App* app, const ExternInfo* einfo)
     if (!bHaveTunnel)
 	return casycom_error ("connected to server that does not support the TLSTunnel interface");
     app->connp = casycom_create_proxy (&i_TLSTunnel, oid_App);
-    PTLSTunnel_Open (&app->connp, "192.168.1.1", "https", NULL);
+    PTLSTunnel_Open (&app->connp, "192.168.1.1", "https");
 }
 
 static void App_IOR_Read (App* app, CharVector* d)
