@@ -32,7 +32,11 @@ static void App_App_Init (App* app, unsigned argc, char* const* argv)
 
     SSL_load_error_strings();
     SSL_library_init();
-    OPENSSL_config (NULL);
+    if (CONF_modules_load_file (NULL, NULL, 0) <= 0) {
+	printf ("Error: failed to load OpenSSL configuration\n");
+	ERR_print_errors_fp (stdout);
+	exit (EXIT_FAILURE);
+    }
 
     casycom_enable_externs();
     extern const Factory f_TLSTunnel;
