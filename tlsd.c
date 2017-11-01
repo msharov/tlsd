@@ -13,7 +13,7 @@ static void* App_Create (const Msg* msg UNUSED)
     { static App app = { PROXY_INIT }; return &app; }
 static void App_Destroy (void* o UNUSED) {}
 
-static void App_App_Init (App* app, unsigned argc, char* const* argv)
+static void App_App_Init (App* app, argc_t argc, argv_t argv)
 {
     bool bPipeMode = false;
     for (int opt; 0 < (opt = getopt (argc, argv, "pd"));) {
