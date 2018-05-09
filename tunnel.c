@@ -33,7 +33,7 @@ typedef struct _TLSTunnel {
 
 static void TLSTunnel_SSLError (const char* label);
 static int TLSTunnel_VerifyConnection (int preverify, X509_STORE_CTX* x509_ctx);
-static void TLSTunnel_TimerR_Timer (TLSTunnel* o);
+static void TLSTunnel_DoIO (TLSTunnel* o);
 
 //----------------------------------------------------------------------
 
@@ -127,11 +127,11 @@ static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char
 	PIO_Read (&o->sio, &o->ibuf);
     } else {
 	o->cstate = state_Handshake;
-	TLSTunnel_TimerR_Timer (o);
+	TLSTunnel_DoIO (o);
     }
 }
 
-static void TLSTunnel_TimerR_Timer (TLSTunnel* o)
+static void TLSTunnel_DoIO (TLSTunnel* o)
 {
     enum ETimerWatchCmd scmd = 0;
     if (o->cstate == state_Handshake) {
@@ -227,10 +227,15 @@ static bool GetSMTPResponse (const char* response, CharVector* d)
     return true;
 }
 
+static void TLSTunnel_TimerR_Timer (TLSTunnel* o, int fd UNUSED, const Msg* msg UNUSED)
+{
+    TLSTunnel_DoIO (o);
+}
+
 static void TLSTunnel_IOR_Read (TLSTunnel* o, CharVector* d)
 {
     if (o->cstate != state_StartTLS)
-	return TLSTunnel_TimerR_Timer (o);
+	return TLSTunnel_DoIO (o);
 
     // Do SMTP STARTTLS
     assert (d == &o->ibuf && "Client data received in STARTTLS state");
@@ -271,9 +276,9 @@ static void TLSTunnel_IOR_Read (TLSTunnel* o, CharVector* d)
     PTimer_Watch (&o->timer, WATCH_READ| WATCH_WRITE, o->sfd, TIMER_NONE);
 }
 
-static void TLSTunnel_IOR_Written (TLSTunnel* o)
+static void TLSTunnel_IOR_Written (TLSTunnel* o, CharVector* v UNUSED)
 {
-    TLSTunnel_TimerR_Timer (o);
+    TLSTunnel_DoIO (o);
 }
 
 static void TLSTunnel_SSLError (const char* label)
