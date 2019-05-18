@@ -31,15 +31,15 @@ typedef struct _TLSTunnel {
 
 //----------------------------------------------------------------------
 
-static void TLSTunnel_SSLError (const char* label);
-static int TLSTunnel_VerifyConnection (int preverify, X509_STORE_CTX* x509_ctx);
-static void TLSTunnel_DoIO (TLSTunnel* o);
+static void TLSTunnel_ssl_error (const char* label);
+static int TLSTunnel_verify_connection (int preverify, X509_STORE_CTX* x509_ctx);
+static void TLSTunnel_do_io (TLSTunnel* o);
 
 //----------------------------------------------------------------------
 
-static void* TLSTunnel_Create (const Msg* msg)
+static void* TLSTunnel_create (const Msg* msg)
 {
-    TLSTunnel* po = (TLSTunnel*) xalloc (sizeof(TLSTunnel));
+    TLSTunnel* po = xalloc (sizeof(TLSTunnel));
     po->sfd = -1;
     VECTOR_MEMBER_INIT (CharVector, po->obuf);
     VECTOR_MEMBER_INIT (CharVector, po->ibuf);
@@ -49,19 +49,19 @@ static void* TLSTunnel_Create (const Msg* msg)
     po->sio = casycom_create_proxy (&i_FdIO, msg->h.dest);
     po->sslctx = SSL_CTX_new (SSLv23_method());
     if (!po->sslctx)
-	TLSTunnel_SSLError ("SSL_CTX_new");
+	TLSTunnel_ssl_error ("SSL_CTX_new");
     else {
-	SSL_CTX_set_verify (po->sslctx, SSL_VERIFY_PEER, TLSTunnel_VerifyConnection);
+	SSL_CTX_set_verify (po->sslctx, SSL_VERIFY_PEER, TLSTunnel_verify_connection);
 	SSL_CTX_set_options (po->sslctx, SSL_OP_NO_SSLv2| SSL_OP_NO_SSLv3);
 	if (1 != SSL_CTX_set_default_verify_paths (po->sslctx))
-	    TLSTunnel_SSLError ("SSL_CTX_set_default_verify_paths");
+	    TLSTunnel_ssl_error ("SSL_CTX_set_default_verify_paths");
     }
     return po;
 }
 
-static void TLSTunnel_Destroy (void* vo)
+static void TLSTunnel_destroy (void* vo)
 {
-    TLSTunnel* o = (TLSTunnel*) vo;
+    TLSTunnel* o = vo;
     if (o) {
 	if (o->ssl) {
 	    if (o->cstate == state_Data)
@@ -85,7 +85,7 @@ static void TLSTunnel_Destroy (void* vo)
     xfree (o);
 }
 
-static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char* port)
+static void TLSTunnel_TLSTunnel_open (TLSTunnel* o, const char* host, const char* port)
 {
     // Lookup the host address
     struct addrinfo* ai = NULL;
@@ -111,7 +111,7 @@ static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char
     // Disable weak ciphers
     long r = SSL_set_cipher_list (o->ssl, "DEFAULT:!EXPORT:!LOW:!MEDIUM:!RC2:!3DES:!MD5:!DSS:!SEED:!RC4:!PSK:@STRENGTH");
     if (r != 1)
-	return TLSTunnel_SSLError ("SSL_set_cipher_list");
+	return TLSTunnel_ssl_error ("SSL_set_cipher_list");
 
     vector_reserve (&o->ibuf, INT16_MAX);
     vector_reserve (&o->obuf, INT16_MAX);
@@ -119,19 +119,19 @@ static void TLSTunnel_TLSTunnel_Open (TLSTunnel* o, const char* host, const char
     // Check if STARTTLS is needed
     if (o->sport == 587 || o->sport == 25) {
 	o->cstate = state_StartTLS;
-	PFdIO_Attach (&o->sio, o->sfd);
+	PFdIO_attach (&o->sio, o->sfd);
 	char hostname [HOST_NAME_MAX] = "localhost";
-	gethostname (ArrayBlock (hostname));
+	gethostname (ARRAY_BLOCK (hostname));
 	o->obuf.size = snprintf (o->obuf.d, o->obuf.allocated, "EHLO %s\r\n", hostname);
-	PIO_Write (&o->sio, &o->obuf);
-	PIO_Read (&o->sio, &o->ibuf);
+	PIO_write (&o->sio, &o->obuf);
+	PIO_read (&o->sio, &o->ibuf);
     } else {
 	o->cstate = state_Handshake;
-	TLSTunnel_DoIO (o);
+	TLSTunnel_do_io (o);
     }
 }
 
-static void TLSTunnel_DoIO (TLSTunnel* o)
+static void TLSTunnel_do_io (TLSTunnel* o)
 {
     enum ETimerWatchCmd scmd = 0;
     if (o->cstate == state_Handshake) {
@@ -148,21 +148,21 @@ static void TLSTunnel_DoIO (TLSTunnel* o)
 	    else if (sslerr == SSL_ERROR_SYSCALL)
 		return casycom_error ("SSL_connect: %s", strerror(errno));
 	    else
-		return TLSTunnel_SSLError ("SSL_connect");
+		return TLSTunnel_ssl_error ("SSL_connect");
 	} else {	// handshake successful
 	    // Verify a server certifcate was presented during negotiation
 	    X509* cert = SSL_get_peer_certificate (o->ssl);
 	    if (!cert)
-		return TLSTunnel_SSLError ("no peer certificate");
+		return TLSTunnel_ssl_error ("no peer certificate");
 	    else
 		X509_free (cert);
-	    // Create client data pipe
+	    // create client data pipe
 	    int cfdp[2];
 	    if (0 > socketpair (PF_LOCAL, SOCK_STREAM| SOCK_NONBLOCK, IPPROTO_IP, cfdp))
 		return casycom_error ("socketpair: %s", strerror(errno));
 	    o->cfd = cfdp[0];
-	    PTLSTunnelR_Connected (&o->reply, cfdp[1]);
-	    PFdIO_Attach (&o->cio, o->cfd);
+	    PTLSTunnelR_connected (&o->reply, cfdp[1]);
+	    PFdIO_attach (&o->cio, o->cfd);
 	    o->cstate = state_Data;
 	}
     }
@@ -180,7 +180,7 @@ static void TLSTunnel_DoIO (TLSTunnel* o)
 		else if (sslerr == SSL_ERROR_SYSCALL)
 		    return casycom_error ("SSL_write: %s", strerror(errno));
 		else
-		    return TLSTunnel_SSLError ("SSL_write");
+		    return TLSTunnel_ssl_error ("SSL_write");
 		break;
 	    } else
 		vector_erase_n (&o->obuf, 0, r);
@@ -198,18 +198,18 @@ static void TLSTunnel_DoIO (TLSTunnel* o)
 		else if (sslerr == SSL_ERROR_SYSCALL)
 		    return casycom_error ("SSL_read: %s", strerror(errno));
 		else
-		    return TLSTunnel_SSLError ("SSL_read");
+		    return TLSTunnel_ssl_error ("SSL_read");
 		break;
 	    } else
 		o->ibuf.size += r;
 	}
 	if (!o->obuf.size)
-	    PIO_Read (&o->cio, &o->obuf);
+	    PIO_read (&o->cio, &o->obuf);
 	if (o->ibuf.size)
-	    PIO_Write (&o->cio, &o->ibuf);
+	    PIO_write (&o->cio, &o->ibuf);
     }
     if (scmd)
-	PTimer_Watch (&o->timer, scmd, o->sfd, TIMER_NONE);
+	PTimer_watch (&o->timer, scmd, o->sfd, TIMER_NONE);
 }
 
 static bool GetSMTPResponse (const char* response, CharVector* d)
@@ -227,15 +227,15 @@ static bool GetSMTPResponse (const char* response, CharVector* d)
     return true;
 }
 
-static void TLSTunnel_TimerR_Timer (TLSTunnel* o, int fd UNUSED, const Msg* msg UNUSED)
+static void TLSTunnel_TimerR_timer (TLSTunnel* o, int fd UNUSED, const Msg* msg UNUSED)
 {
-    TLSTunnel_DoIO (o);
+    TLSTunnel_do_io (o);
 }
 
-static void TLSTunnel_IOR_Read (TLSTunnel* o, CharVector* d)
+static void TLSTunnel_IOR_read (TLSTunnel* o, CharVector* d)
 {
     if (o->cstate != state_StartTLS)
-	return TLSTunnel_DoIO (o);
+	return TLSTunnel_do_io (o);
 
     // Do SMTP STARTTLS
     assert (d == &o->ibuf && "Client data received in STARTTLS state");
@@ -250,7 +250,7 @@ static void TLSTunnel_IOR_Read (TLSTunnel* o, CharVector* d)
 	++o->ststate;
 	assert (!o->obuf.size && "Received a response to an unwritten request");
 	o->obuf.size = snprintf (o->obuf.d, o->obuf.allocated, "STARTTLS\r\n");
-	PIO_Write (&o->sio, &o->obuf);
+	PIO_write (&o->sio, &o->obuf);
 	return;
     }
     // Looking for the STARTTLS acknowledgement
@@ -270,18 +270,18 @@ static void TLSTunnel_IOR_Read (TLSTunnel* o, CharVector* d)
     assert (!o->ibuf.size && "Server wrote non-SSL data after STARTTLS");
     vector_clear (&o->ibuf);
     o->obuf.size = snprintf (o->obuf.d, o->obuf.allocated, "NOOP\r\n");
-    PIO_Read (&o->sio, NULL);
+    PIO_read (&o->sio, NULL);
     // Go to SSL negotiation
     o->cstate = state_Handshake;
-    PTimer_Watch (&o->timer, WATCH_READ| WATCH_WRITE, o->sfd, TIMER_NONE);
+    PTimer_watch (&o->timer, WATCH_READ| WATCH_WRITE, o->sfd, TIMER_NONE);
 }
 
-static void TLSTunnel_IOR_Written (TLSTunnel* o, CharVector* v UNUSED)
+static void TLSTunnel_IOR_written (TLSTunnel* o, CharVector* v UNUSED)
 {
-    TLSTunnel_DoIO (o);
+    TLSTunnel_do_io (o);
 }
 
-static void TLSTunnel_SSLError (const char* label)
+static void TLSTunnel_ssl_error (const char* label)
 {
     unsigned long err = ERR_get_error();
     const char* errstr = ERR_reason_error_string(err);
@@ -291,7 +291,7 @@ static void TLSTunnel_SSLError (const char* label)
 	casycom_error ("%s failed with code 0x%lx", label, err);
 }
 
-static int TLSTunnel_VerifyConnection (int preverify, X509_STORE_CTX* x509_ctx)
+static int TLSTunnel_verify_connection (int preverify, X509_STORE_CTX* x509_ctx)
 {
     if (!preverify) {
 	int e = X509_STORE_CTX_get_error (x509_ctx);
@@ -303,19 +303,19 @@ static int TLSTunnel_VerifyConnection (int preverify, X509_STORE_CTX* x509_ctx)
 
 static const DTLSTunnel d_TLSTunnel_TLSTunnel = {
     .interface = &i_TLSTunnel,
-    DMETHOD (TLSTunnel, TLSTunnel_Open)
+    DMETHOD (TLSTunnel, TLSTunnel_open)
 };
 static const DTimerR d_TLSTunnel_TimerR = {
     .interface = &i_TimerR,
-    DMETHOD (TLSTunnel, TimerR_Timer)
+    DMETHOD (TLSTunnel, TimerR_timer)
 };
 static const DIOR d_TLSTunnel_IOR = {
     .interface = &i_IOR,
-    DMETHOD (TLSTunnel, IOR_Read),
-    DMETHOD (TLSTunnel, IOR_Written)
+    DMETHOD (TLSTunnel, IOR_read),
+    DMETHOD (TLSTunnel, IOR_written)
 };
 const Factory f_TLSTunnel = {
-    .Create = TLSTunnel_Create,
-    .Destroy = TLSTunnel_Destroy,
+    .create = TLSTunnel_create,
+    .destroy = TLSTunnel_destroy,
     .dtable = { &d_TLSTunnel_TLSTunnel, &d_TLSTunnel_TimerR, &d_TLSTunnel_IOR, NULL }
 };

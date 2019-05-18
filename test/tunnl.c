@@ -16,12 +16,12 @@ typedef struct {
     CharVector	wbuf;		//	sending this to server, and
     CharVector	rbuf;		//	receiving server responsed here
     Proxy	externp;	// casycom connection to tlsd
-    const char*	serverArg;	// command line options to pass to tlsd, if launching
+    const char*	server_arg;	// command line options to pass to tlsd, if launching
 } App;
 
 //----------------------------------------------------------------------
 
-static void* App_Create (const Msg* msg UNUSED)
+static void* App_create (const Msg* msg UNUSED)
 {
     static App app = {
 	PROXY_INIT,
@@ -34,9 +34,9 @@ static void* App_Create (const Msg* msg UNUSED)
     };
     return &app;
 }
-static void App_Destroy (void* o UNUSED) {}
+static void App_destroy (void* o UNUSED) {}
 
-static void App_App_Init (App* app, unsigned argc, char* const* argv)
+static void App_App_init (App* app, unsigned argc, char* const* argv)
 {
     bool bTestSystemService = false;
     for (int opt; 0 < (opt = getopt (argc, argv, "sdD"));) {
@@ -45,7 +45,7 @@ static void App_App_Init (App* app, unsigned argc, char* const* argv)
 	else if (opt == 'd')	// debug this client
 	    casycom_enable_debug_output();
 	else if (opt == 'D')	// debug tlsd itself
-	    app->serverArg = "-pd";
+	    app->server_arg = "-pd";
 	else {
 	    printf ("Usage: tunnl [-dD]\n"
 		    "  -d\tenable debug tracing\n"
@@ -66,16 +66,16 @@ static void App_App_Init (App* app, unsigned argc, char* const* argv)
 
     if (bTestSystemService) {
 	printf ("Connecting to system tlsd\n");
-        if (0 > PExtern_ConnectSystemLocal (&app->externp, TLSD_SOCKET, iil))
-	    casycom_error ("Extern_ConnectSystemLocal: %s", strerror(errno));
+        if (0 > PExtern_connect_system_local (&app->externp, TLSD_SOCKET, iil))
+	    casycom_error ("Extern_connect_system_local: %s", strerror(errno));
     } else {
-	printf ("Launching %s %s\n", TLSD_NAME, app->serverArg);
-	if (0 > PExtern_LaunchPipe (&app->externp, ".o/"TLSD_NAME, app->serverArg, iil))
-	    return casycom_error ("PExtern_LaunchPipe: %s", strerror(errno));
+	printf ("Launching %s %s\n", TLSD_NAME, app->server_arg);
+	if (0 > PExtern_launch_pipe (&app->externp, TLSD_NAME, app->server_arg, iil))
+	    return casycom_error ("PExtern_launch_pipe: %s", strerror(errno));
     }
 }
 
-static void App_ExternR_Connected (App* app, const ExternInfo* einfo)
+static void App_ExternR_connected (App* app, const ExternInfo* einfo)
 {
     // tlsd connection established and it sent us the list of supported interfaces
     bool bHaveTunnel = false;
@@ -94,12 +94,12 @@ static void App_ExternR_Connected (App* app, const ExternInfo* einfo)
     // we can create a tunnel object there.
     app->connp = casycom_create_proxy (&i_TLSTunnel, oid_App);
     // With the tunnel object created, connect it to the web server (your router)
-    PTLSTunnel_Open (&app->connp, "192.168.1.1", "https");
+    PTLSTunnel_open (&app->connp, "192.168.1.1", "8443");
     // When the TLS connection has been established, connp will send
-    // us a TLSTunnelR_Connected message with a proxy file descriptor
+    // us a TLSTunnelR_connected message with a proxy file descriptor
 }
 
-static void App_TLSTunnelR_Connected (App* app, int sfd)
+static void App_TLSTunnelR_connected (App* app, int sfd)
 {
     // sfd is the unencrypted proxy socket which tlsd relays to the web server
     app->sfd = sfd;
@@ -114,12 +114,12 @@ static void App_TLSTunnelR_Connected (App* app, int sfd)
     // Setup the asynchronous socket IO object, which will send us
     // IOR_Read when data is available, and IOR_Written when wbuf has
     // been written (IOR_Written is not used in this demo)
-    PFdIO_Attach (&app->sio, sfd);
-    PIO_Read (&app->sio, &app->rbuf);
-    PIO_Write (&app->sio, &app->wbuf);
+    PFdIO_attach (&app->sio, sfd);
+    PIO_read (&app->sio, &app->rbuf);
+    PIO_write (&app->sio, &app->wbuf);
 }
 
-static void App_IOR_Read (App* app, CharVector* d)
+static void App_IOR_read (App* app, CharVector* d)
 {
     // d will be NULL when the server closes the connection
     if (!d)
@@ -146,7 +146,7 @@ static void App_IOR_Read (App* app, CharVector* d)
 	vector_erase_n (d, 0, bw);
     }
     // And keep reading while the server keeps sending
-    PIO_Read (&app->sio, d);
+    PIO_read (&app->sio, d);
 }
 
 //----------------------------------------------------------------------
@@ -154,23 +154,23 @@ static void App_IOR_Read (App* app, CharVector* d)
 // These are object vtables. See casycom documentation for a tutorial.
 static const DApp d_App_App = {
     .interface = &i_App,
-    DMETHOD (App, App_Init)
+    DMETHOD (App, App_init)
 };
 static const DExternR d_App_ExternR = {
     .interface = &i_ExternR,
-    DMETHOD (App, ExternR_Connected)
+    DMETHOD (App, ExternR_connected)
 };
 static const DTLSTunnelR d_App_TLSTunnelR = {
     .interface = &i_TLSTunnelR,
-    DMETHOD (App, TLSTunnelR_Connected)
+    DMETHOD (App, TLSTunnelR_connected)
 };
 static const DIOR d_App_IOR = {
     .interface = &i_IOR,
-    DMETHOD (App, IOR_Read)
+    DMETHOD (App, IOR_read)
 };
 static const Factory f_App = {
-    .Create     = App_Create,
-    .Destroy    = App_Destroy,
+    .create     = App_create,
+    .destroy    = App_destroy,
     .dtable     = { &d_App_App, &d_App_ExternR, &d_App_TLSTunnelR, &d_App_IOR, NULL }
 };
 

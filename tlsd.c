@@ -9,11 +9,11 @@
 
 typedef struct { Proxy esrvp; } App;
 
-static void* App_Create (const Msg* msg UNUSED)
+static void* App_create (const Msg* msg UNUSED)
     { static App app = { PROXY_INIT }; return &app; }
-static void App_Destroy (void* o UNUSED) {}
+static void App_destroy (void* o UNUSED) {}
 
-static void App_App_Init (App* app, argc_t argc, argv_t argv)
+static void App_App_init (App* app, argc_t argc, argv_t argv)
 {
     bool bPipeMode = false;
     for (int opt; 0 < (opt = getopt (argc, argv, "pd"));) {
@@ -45,18 +45,18 @@ static void App_App_Init (App* app, argc_t argc, argv_t argv)
     static const iid_t eil[] = { &i_TLSTunnel, NULL };
     if (bPipeMode) {
 	app->esrvp = casycom_create_proxy (&i_Extern, oid_App);
-        PExtern_Open (&app->esrvp, STDIN_FILENO, EXTERN_SERVER, NULL, eil);
+        PExtern_open (&app->esrvp, STDIN_FILENO, EXTERN_SERVER, NULL, eil);
     } else {
 	casycom_register (&f_ExternServer);
 	app->esrvp = casycom_create_proxy (&i_ExternServer, oid_App);
 	if (sd_listen_fds())
-	    PExternServer_Open (&app->esrvp, SD_LISTEN_FDS_START+0, eil, true);
-	else if (0 > PExternServer_BindSystemLocal (&app->esrvp, TLSD_SOCKET, eil))
-	    casycom_error ("ExternServer_BindSystemLocal: %s", strerror(errno));
+	    PExternServer_open (&app->esrvp, SD_LISTEN_FDS_START+0, eil, true);
+	else if (0 > PExternServer_bind_system_local (&app->esrvp, TLSD_SOCKET, eil))
+	    casycom_error ("ExternServer_bind_system_local: %s", strerror(errno));
     }
 }
 
-static void App_ObjectDestroyed (void* vo, oid_t oid)
+static void App_object_destroyed (void* vo, oid_t oid)
 {
     App* app = (App*) vo;
     if (oid == app->esrvp.dest && !casycom_is_quitting())
@@ -67,15 +67,15 @@ static void App_ObjectDestroyed (void* vo, oid_t oid)
 
 static const DApp d_App_App = {
     .interface = &i_App,
-    DMETHOD (App, App_Init)
+    DMETHOD (App, App_init)
 };
 static const DExternR d_App_ExternR = {
     .interface = &i_ExternR
 };
 static const Factory f_App = {
-    .Create     = App_Create,
-    .Destroy    = App_Destroy,
-    .ObjectDestroyed = App_ObjectDestroyed,
+    .create     = App_create,
+    .destroy    = App_destroy,
+    .object_destroyed = App_object_destroyed,
     .dtable     = { &d_App_App, &d_App_ExternR, NULL }
 };
 

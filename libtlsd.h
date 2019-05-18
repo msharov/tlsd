@@ -14,25 +14,25 @@ extern "C" {
 
 //----------------------------------------------------------------------
 
-typedef void (*MFN_TLSTunnel_Open)(void* o, const char* host, const char* port);
+typedef void (*MFN_TLSTunnel_open)(void* o, const char* host, const char* port);
 typedef struct _DTLSTunnel {
     const Interface*	interface;
-    MFN_TLSTunnel_Open	TLSTunnel_Open;
+    MFN_TLSTunnel_open	TLSTunnel_open;
 } DTLSTunnel;
 
-void PTLSTunnel_Open (const Proxy* pp, const char* host, const char* port) noexcept;
+void PTLSTunnel_open (const Proxy* pp, const char* host, const char* port) noexcept;
 
 extern const Interface i_TLSTunnel;
 
 //----------------------------------------------------------------------
 
-typedef void (*MFN_TLSTunnelR_Connected)(void* o, int sfd);
+typedef void (*MFN_TLSTunnelR_connected)(void* o, int sfd);
 typedef struct _DTLSTunnelR {
     const Interface*		interface;
-    MFN_TLSTunnelR_Connected	TLSTunnelR_Connected;
+    MFN_TLSTunnelR_connected	TLSTunnelR_connected;
 } DTLSTunnelR;
 
-void PTLSTunnelR_Connected (const Proxy* pp, int sfd) noexcept;
+void PTLSTunnelR_connected (const Proxy* pp, int sfd) noexcept;
 
 extern const Interface i_TLSTunnelR;
 
