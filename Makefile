@@ -2,29 +2,32 @@
 
 ################ Source files ##########################################
 
-EXE	:= $O${NAME}
-SRCS	:= $(wildcard *.c)
-OBJS	:= $(addprefix $O,$(SRCS:.c=.o))
-DEPS	:= ${OBJS:.o=.d}
-LIB	:= $Olib${NAME}.a
-LIBOBJ	:= $Olib${NAME}.o
-CONFS	:= Config.mk config.h
-ONAME   := $(notdir $(abspath $O))
+exe	:= $O${name}
+srcs	:= $(wildcard *.c)
+objs	:= $(addprefix $O,$(srcs:.c=.o))
+deps	:= ${objs:.o=.d}
+confs	:= Config.mk config.h
+oname   := $(notdir $(abspath $O))
+liba_r	:= $Olib${name}.a
+liba_d	:= $Olib${name}_d.a
+ifdef debug
+liba	:= ${liba_d}
+else
+liba	:= ${liba_r}
+endif
 
 ################ Compilation ###########################################
 
+.SUFFIXES:
 .PHONY: all clean distclean maintainer-clean
 
-all:	${CONFS} ${EXE} ${LIB}
+all:	${exe}
 
-run:	${EXE}
-	@${EXE}
-
-${EXE}:	${OBJS}
+${exe}:	${objs}
 	@echo "Linking $@ ..."
-	@${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
+	@${CC} ${ldflags} -o $@ $^ ${libs}
 
-${LIB}:	${LIBOBJ}
+${liba}:	$Olib${name}.o
 	@echo "Linking $@ ..."
 	@rm -f $@
 	@${AR} qc $@ $^
@@ -32,78 +35,154 @@ ${LIB}:	${LIBOBJ}
 
 $O%.o:	%.c
 	@echo "    Compiling $< ..."
-	@[ -d $(dir $@) ] || mkdir -p $(dir $@)
-	@${CC} ${CFLAGS} -MMD -MT "$(<:.c=.s) $@" -o $@ -c $<
+	@${CC} ${cflags} -MMD -MT "$(<:.c=.s) $@" -o $@ -c $<
 
 %.s:	%.c
 	@echo "    Compiling $< to assembly ..."
-	@${CC} ${CFLAGS} -S -o $@ -c $<
+	@${CC} ${cflags} -S -o $@ -c $<
 
 ################ Installation ##########################################
 
-.PHONY:	install uninstall
+.PHONY:	install installdirs uninstall uninstall-man uninstall-incs
+.PHONY:	uninstall-lib uninstall-pc uninstall-svc
 
-ifdef BINDIR
-EXEI	:= ${BINDIR}/$(notdir ${EXE})
-LIBI	:= ${LIBDIR}/$(notdir ${LIB})
-LIBH	:= ${INCDIR}/lib${NAME}.h
-SYSDS	:= ${SYSDDIR}/${NAME}.service ${SYSDDIR}/${NAME}.socket
+ifdef bindir
+exed	:= ${DESTDIR}${bindir}
+exei	:= ${exed}/$(notdir ${exe})
 
-install:	${EXEI} ${LIBI} ${LIBH} ${SYSDS}
+${exed}:
+	@echo "Creating $@ ..."
+	@${INSTALL} -d $@
+${exei}:	${exe} | ${exed}
+	@echo "Installing $@ ..."
+	@${INSTALL_PROGRAM} $< $@
 
-${EXEI}:	${EXE}
-	@echo "Installing $< as $@ ..."
-	@${INSTALLEXE} $< $@
-
-${LIBI}:	${LIB}
-	@echo "Installing $< as $@ ..."
-	@${INSTALLDATA} $< $@
-
-${LIBH}:	lib${NAME}.h
-	@echo "Installing $< as $@ ..."
-	@${INSTALLDATA} $< $@
-
-${SYSDDIR}/${NAME}.service:	doc/${NAME}.service
-	@echo "Installing $< as $@ ..."
-	@${INSTALLDATA} $< $@
-
-${SYSDDIR}/${NAME}.socket:	doc/${NAME}.socket
-	@echo "Installing $< as $@ ..."
-	@${INSTALLDATA} $< $@
-
+installdirs:	${exed}
+install:	${exei}
 uninstall:
-	@echo "Uninstalling ..."
-	@rm -f ${EXEI} ${LIBI} ${LIBH} ${SYSDS}
+	@if [ -f ${exei} ]; then\
+	    echo "Removing ${exei} ...";\
+	    rm -f ${exei};\
+	fi
+endif
+ifdef includedir
+incsd	:= ${DESTDIR}${includedir}
+incsi	:= ${incsd}/lib${name}.h
+
+${incsd}:
+	@echo "Creating $@ ..."
+	@${INSTALL} -d $@
+${incsi}:	lib${name}.h | ${incsd}
+	@echo "Installing $@ ..."
+	@${INSTALL_DATA} $< $@
+
+install:	${incsi}
+installdirs:	${incsd}
+uninstall:	uninstall-incs
+uninstall-incs:
+	@if [ -f ${incsi} ]; then\
+	    echo "Removing headers ...";\
+	    rm -f ${incsi};\
+	fi
+endif
+ifdef libdir
+libad	:= ${DESTDIR}${libdir}
+libai	:= ${libad}/$(notdir ${liba})
+libai_r	:= ${libad}/$(notdir ${liba_r})
+libai_d	:= ${libad}/$(notdir ${liba_d})
+
+${libad}:
+	@echo "Creating $@ ..."
+	@${INSTALL} -d $@
+${libai}:	${liba} | ${libad}
+	@echo "Installing $@ ..."
+	@${INSTALL_DATA} $< $@
+
+install:	${libai}
+installdirs:	${libad}
+uninstall:	uninstall-lib
+uninstall-lib:
+	@if [ -f ${libai_r} -o -f ${libai_d} ]; then\
+	    echo "Removing ${libai} ...";\
+	    rm -f ${libai_r} ${libai_d};\
+	fi
+endif
+ifdef pkgconfigdir
+pcd	:= ${DESTDIR}${pkgconfigdir}
+pci	:= ${pcd}/${name}.pc
+
+${pcd}:
+	@echo "Creating $@ ..."
+	@${INSTALL} -d $@
+${pci}:	${name}.pc | ${pcd}
+	@echo "Installing $@ ..."
+	@${INSTALL_DATA} $< $@
+
+install:	${pci}
+installdirs:	${pcd}
+uninstall:	uninstall-pc
+uninstall-pc:
+	@if [ -f ${pci} ]; then\
+	    echo "Removing ${pci} ...";\
+	    rm -f ${pci};\
+	fi
+endif
+ifdef sysddir
+svcd	:= ${DESTDIR}${sysddir}
+svci	:= ${svcd}/${name}.service
+socki	:= ${svcd}/${name}.socket
+
+${svcd}:
+	@echo "Creating $@ ..."
+	@${INSTALL} -d $@
+${svci}:	$(notdir ${svci}) | ${svcd}
+	@echo "Installing $@ ..."
+	@${INSTALL_DATA} $< $@
+${socki}:	$(notdir ${socki}) | ${svcd}
+	@echo "Installing $@ ..."
+	@${INSTALL_DATA} $< $@
+
+installdirs:	${svcd}
+install:	${svci} ${socki}
+uninstall:	uninstall-svc
+uninstall-svc:
+	@if [ -f ${svci} -o -f ${socki} ]; then\
+	    echo "Removing ${svci} ...";\
+	    rm -f ${svci} ${socki};\
+	fi
 endif
 
 ################ Maintenance ###########################################
 
-include test/Module.mk
-
 clean:
-	@if [ -h ${ONAME} ]; then\
-	    rm -f $O.d ${EXE} ${LIB} ${OBJS} ${DEPS} ${ONAME};\
-	    ${RMPATH} ${BUILDDIR};\
+	@if [ -d ${builddir} ]; then\
+	    rm -f ${exe} ${liba_r} ${liba_d} ${objs} ${deps} $O.d;\
+	    rmdir ${builddir};\
 	fi
 
 distclean:	clean
-	@rm -f ${CONFS} config.status
+	@rm -f config.status ${confs} ${oname}
 
 maintainer-clean: distclean
 
-$O.d:   ${BUILDDIR}/.d
-	@[ -h ${ONAME} ] || ln -sf ${BUILDDIR} ${ONAME}
-${BUILDDIR}/.d:     Makefile
-	@mkdir -p ${BUILDDIR} && touch ${BUILDDIR}/.d
+${builddir}/.d:
+	@[ -d $(dir $@) ] || mkdir -p $(dir $@)
+	@touch $@
+$O.d:	| ${builddir}/.d
+	@[ -h ${oname} ] || ln -sf ${builddir} ${oname}
+$O%/.d:	| $O.d
+	@[ -d $(dir $@) ] || mkdir $(dir $@)
+	@touch $@
 
+${objs}:	Makefile ${confs} | $O.d
+config.h:	config.h.in | Config.mk
 Config.mk:	Config.mk.in
-config.h:	config.h.in
-${OBJS}:	Makefile ${CONFS} $O.d
-${CONFS}:	configure
+${confs}:	configure
 	@if [ -x config.status ]; then echo "Reconfiguring ...";\
 	    ./config.status;\
 	else echo "Running configure ...";\
 	    ./configure;\
 	fi
 
--include ${DEPS}
+include test/Module.mk
+-include ${deps}

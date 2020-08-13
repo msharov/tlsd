@@ -1,46 +1,37 @@
-################ Build options #######################################
-
-NAME		:= @PKG_NAME@
-MAJOR		:= @PKG_MAJOR@
-MINOR		:= @PKG_MINOR@
-
-#DEBUG		:= 1
+name		:= @pkg_name@
 
 ################ Programs ############################################
 
 CC		:= @CC@
-LD		:= @CC@
 AR		:= @AR@
 RANLIB		:= @RANLIB@
 INSTALL		:= @INSTALL@
-
-INSTALLEXE	:= ${INSTALL} -D -p -m 755 -s
-INSTALLDATA	:= ${INSTALL} -D -p -m 644
-RMPATH		:= rmdir -p --ignore-fail-on-non-empty
+INSTALL_DATA	:= ${INSTALL} -m 644
+INSTALL_PROGRAM	:= ${INSTALL} -m 755
 
 ################ Destination #########################################
 
-BINDIR		:= @bindir@
-LIBDIR		:= @libdir@
-INCDIR		:= @includedir@
-MANDIR		:= @mandir@
-SYSDDIR		:= ${LIBDIR}/systemd/system
+prefix		:= @prefix@
+bindir		:= @bindir@
+includedir	:= @includedir@
+libdir		:= @libdir@
+pkgconfigdir	:= @pkgconfigdir@
+sysddir		:= @sysddir@
+TMPDIR		:= @TMPDIR@
+builddir	:= @builddir@/${name}
+O		:= .o/
 
 ################ Compiler options ####################################
 
-WARNOPTS	:= -Wall -Wextra -Wredundant-decls -Wshadow @SYSWARNS@
-CFLAGS		:= ${WARNOPTS} -march=native -std=c11 \
-		-ffunction-sections -fdata-sections -I@customincdir@
-LDFLAGS		:= -L@customlibdir@
-LIBS		:= @libssl@ @libcrypto@
-ifdef DEBUG
-    CFLAGS	+= -O0 -ggdb3
-    LDFLAGS	+= -g
-    LIBS	+= @libcasycom@_d
+#debug		:= 1
+libs		:= @pkg_libs@
+ifdef debug
+    cflags	:= -O0 -ggdb3
+    ldflags	:= -g -rdynamic
 else
-    CFLAGS	+= -Os -g0 -DNDEBUG=1
-    LDFLAGS	+= -s -Wl,-O1,-gc-sections
-    LIBS	+= @libcasycom@
+    cflags	:= -Os -g0 -DNDEBUG=1
+    ldflags	:= -s
 endif
-BUILDDIR	:= @builddir@/${NAME}
-O		:= .o/
+CFLAGS		:= -Wall -Wextra -Wredundant-decls -Wshadow
+cflags		+= -std=c11 @pkg_cflags@ ${CFLAGS}
+ldflags		+= @pkg_ldflags@ ${LDFLAGS}

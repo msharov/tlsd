@@ -1,0 +1,10 @@
+prefix=@prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: @pkg_name@
+Description: TLS tunnel service
+Version: @pkg_major@.@pkg_minor@
+Requires: casycom
+Libs: -L${libdir} -l@pkg_name@
+Cflags: -I${includedir}

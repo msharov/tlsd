@@ -1,7 +1,7 @@
 // This file is part of the tlsd project
 //
 // Copyright (c) 2015 by Mike Sharov <msharov@users.sourceforge.net>
-// This file is free software, distributed under the MIT License.
+// This file is free software, distributed under the ISC license.
 
 #include "libtlsd.h"
 
