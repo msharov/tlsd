@@ -89,9 +89,16 @@ static void TLSTunnel_TLSTunnel_open (TLSTunnel* o, const char* host, const char
 {
     // Lookup the host address
     struct addrinfo* ai = NULL;
-    static const struct addrinfo hints = { .ai_family = PF_UNSPEC, .ai_socktype = SOCK_STREAM };
-    if (0 > getaddrinfo (host, port, &hints, &ai) || !ai)
-	return casycom_error ("getaddrinfo: %s", strerror(errno));
+    for (unsigned ntry = 0;;) {
+	static const struct addrinfo hints = { .ai_family = PF_UNSPEC, .ai_socktype = SOCK_STREAM };
+	int gar = getaddrinfo (host, port, &hints, &ai);
+	if (gar == EAI_AGAIN && ntry++ <= 15) {
+	    sleep (1);
+	    continue;
+	} else if (gar < 0 || !ai)
+	    return casycom_error ("getaddrinfo: %s", strerror(errno));
+	break;
+    }
 
     // Create the socket
     o->sfd = socket (ai->ai_family, SOCK_STREAM| SOCK_NONBLOCK| SOCK_CLOEXEC, ai->ai_protocol);
